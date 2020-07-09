@@ -495,7 +495,7 @@ impl Client {
         // will receive a piece of incoming receipts only
         // with merkle receipts proofs which can be checked locally
         let outgoing_receipts_hashes =
-            self.runtime_adapter.build_receipts_hashes(&outgoing_receipts);
+            self.runtime_adapter.build_receipts_hashes(&outgoing_receipts, epoch_id);
         let (outgoing_receipts_root, _) = merklize(&outgoing_receipts_hashes);
 
         let (encoded_chunk, merkle_paths) = self.shards_mgr.create_encoded_shard_chunk(
@@ -1079,7 +1079,8 @@ impl Client {
 
     /// Forwards given transaction to upcoming validators.
     fn forward_tx(&self, epoch_id: &EpochId, tx: &SignedTransaction) -> Result<(), Error> {
-        let shard_id = self.runtime_adapter.account_id_to_shard_id(&tx.transaction.signer_id);
+        let shard_id =
+            self.runtime_adapter.account_id_to_shard_id(&tx.transaction.signer_id, epoch_id);
         let head = self.chain.head()?;
         let maybe_next_epoch_id = self.get_next_epoch_id_if_at_boundary(&head)?;
 
@@ -1170,8 +1171,10 @@ impl Client {
         check_only: bool,
     ) -> Result<NetworkClientResponses, Error> {
         let head = self.chain.head()?;
+        let epoch_id = self.runtime_adapter.get_epoch_id_from_prev_block(&head.last_block_hash)?;
         let me = self.validator_signer.as_ref().map(|vs| vs.validator_id());
-        let shard_id = self.runtime_adapter.account_id_to_shard_id(&tx.transaction.signer_id);
+        let shard_id =
+            self.runtime_adapter.account_id_to_shard_id(&tx.transaction.signer_id, &epoch_id);
         let cur_block_header = self.chain.head_header()?.clone();
         let transaction_validity_period = self.chain.transaction_validity_period;
         // here it is fine to use `cur_block_header` as it is a best effort estimate. If the transaction
@@ -1186,11 +1189,12 @@ impl Client {
             return Ok(NetworkClientResponses::InvalidTx(e));
         }
         let gas_price = cur_block_header.gas_price();
-        let epoch_id = self.runtime_adapter.get_epoch_id_from_prev_block(&head.last_block_hash)?;
 
         // Fast transaction validation without a state root.
-        if let Some(err) =
-            self.runtime_adapter.validate_tx(gas_price, None, &tx).expect("no storage errors")
+        if let Some(err) = self
+            .runtime_adapter
+            .validate_tx(gas_price, None, &tx, &epoch_id)
+            .expect("no storage errors")
         {
             debug!(target: "client", "Invalid tx during basic validation: {:?}", err);
             return Ok(NetworkClientResponses::InvalidTx(err));
@@ -1216,7 +1220,7 @@ impl Client {
             };
             if let Some(err) = self
                 .runtime_adapter
-                .validate_tx(gas_price, Some(state_root), &tx)
+                .validate_tx(gas_price, Some(state_root), &tx, &epoch_id)
                 .expect("no storage errors")
             {
                 debug!(target: "client", "Invalid tx: {:?}", err);

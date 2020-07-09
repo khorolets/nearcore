@@ -233,7 +233,8 @@ impl GenesisBuilder {
     fn add_additional_account(&mut self, account_id: AccountId) -> Result<()> {
         let testing_init_balance: Balance = 10u128.pow(30);
         let testing_init_stake: Balance = 0;
-        let shard_id = self.runtime.account_id_to_shard_id(&account_id);
+        // TODO ??
+        let shard_id = self.runtime.account_id_to_shard_id(&account_id, &EpochId::default());
         let mut records = self.unflushed_records.remove(&shard_id).unwrap_or_default();
         let mut state_update =
             self.state_updates.remove(&shard_id).expect("State update should have been added");

@@ -22,7 +22,7 @@ mod tests {
     use near_primitives::receipt::Receipt;
     use near_primitives::sharding::ChunkHash;
     use near_primitives::transaction::SignedTransaction;
-    use near_primitives::types::{BlockHeight, BlockHeightDelta, BlockIdOrFinality};
+    use near_primitives::types::{BlockHeight, BlockHeightDelta, BlockIdOrFinality, EpochId};
     use near_primitives::views::{QueryRequest, QueryResponseKind::ViewAccount};
 
     fn get_validators_and_key_pairs() -> (Vec<Vec<&'static str>>, Vec<PeerInfo>) {
@@ -150,8 +150,10 @@ mod tests {
                     move |_account_id: String, msg: &NetworkRequests| {
                         let account_from = "test3.3".to_string();
                         let account_to = "test1.1".to_string();
-                        let source_shard_id = account_id_to_shard_id(&account_from, 4);
-                        let destination_shard_id = account_id_to_shard_id(&account_to, 4);
+                        let source_shard_id =
+                            account_id_to_shard_id(&account_from, &EpochId::default(), 4);
+                        let destination_shard_id =
+                            account_id_to_shard_id(&account_to, &EpochId::default(), 4);
 
                         let mut phase = phase.write().unwrap();
                         let mut seen_heights_with_receipts =

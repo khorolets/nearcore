@@ -167,7 +167,7 @@ impl ViewClientActor {
             QueryRequest::ViewAccessKeyList { account_id, .. } => account_id,
             QueryRequest::CallFunction { account_id, .. } => account_id,
         };
-        let shard_id = self.runtime_adapter.account_id_to_shard_id(account_id);
+        let shard_id = self.runtime_adapter.account_id_to_shard_id(account_id, header.epoch_id());
 
         // If we have state for the shard that we query return query result directly.
         // Otherwise route query to peers.
@@ -244,7 +244,13 @@ impl ViewClientActor {
             return Ok(Some(res));
         }
         let head = self.chain.head().map_err(|e| TxStatusError::ChainError(e))?;
-        let target_shard_id = self.runtime_adapter.account_id_to_shard_id(&signer_account_id);
+        // TODO Discuss: Should `get_tx_status` accept epoch_id as argument? The following line may be wrong
+        let epoch_id = self
+            .runtime_adapter
+            .get_epoch_id_from_prev_block(&head.last_block_hash)
+            .map_err(|e| TxStatusError::ChainError(e))?;
+        let target_shard_id =
+            self.runtime_adapter.account_id_to_shard_id(&signer_account_id, &epoch_id);
         // Check if we are tracking this shard.
         if self.runtime_adapter.cares_about_shard(
             self.validator_account_id.as_ref(),
@@ -289,8 +295,6 @@ impl ViewClientActor {
             }
         } else {
             if Self::need_request(tx_hash, &mut self.tx_status_requests) {
-                let target_shard_id =
-                    self.runtime_adapter.account_id_to_shard_id(&signer_account_id);
                 let validator = self
                     .chain
                     .find_validator_for_forwarding(target_shard_id)
@@ -561,11 +565,12 @@ impl Handler<GetExecutionOutcome> for ViewClientActor {
 
     fn handle(&mut self, msg: GetExecutionOutcome, _: &mut Context<Self>) -> Self::Result {
         let (id, target_shard_id) = match msg.id {
-            TransactionOrReceiptId::Transaction { transaction_hash, sender_id } => {
-                (transaction_hash, self.runtime_adapter.account_id_to_shard_id(&sender_id))
-            }
-            TransactionOrReceiptId::Receipt { receipt_id, receiver_id } => {
-                (receipt_id, self.runtime_adapter.account_id_to_shard_id(&receiver_id))
+            TransactionOrReceiptId::Transaction { transaction_hash, sender_id, epoch_id } => (
+                transaction_hash,
+                self.runtime_adapter.account_id_to_shard_id(&sender_id, &epoch_id),
+            ),
+            TransactionOrReceiptId::Receipt { receipt_id, receiver_id, epoch_id } => {
+                (receipt_id, self.runtime_adapter.account_id_to_shard_id(&receiver_id, &epoch_id))
             }
         };
         match self.chain.get_execution_outcome(&id) {

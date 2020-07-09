@@ -388,6 +388,7 @@ impl StateRootNode {
     BorshSerialize,
     BorshDeserialize,
     Serialize,
+    Deserialize,
 )]
 #[as_ref(forward)]
 pub struct EpochId(pub CryptoHash);
@@ -534,8 +535,8 @@ pub enum ValidatorKickoutReason {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TransactionOrReceiptId {
-    Transaction { transaction_hash: CryptoHash, sender_id: AccountId },
-    Receipt { receipt_id: CryptoHash, receiver_id: AccountId },
+    Transaction { transaction_hash: CryptoHash, sender_id: AccountId, epoch_id: EpochId },
+    Receipt { receipt_id: CryptoHash, receiver_id: AccountId, epoch_id: EpochId },
 }
 
 /// Provides information about current epoch validators.

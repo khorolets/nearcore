@@ -17,6 +17,7 @@ use near_network::types::NetworkRequests::PartialEncodedChunkMessage;
 use near_network::{NetworkClientMessages, NetworkRequests, NetworkResponses, PeerInfo};
 use near_primitives::block::Block;
 use near_primitives::transaction::SignedTransaction;
+use near_primitives::types::EpochId;
 
 #[test]
 fn repro_1183() {
@@ -87,8 +88,11 @@ fn repro_1183() {
                     let mut nonce_delta = 0;
                     for from in vec!["test1", "test2", "test3", "test4"] {
                         for to in vec!["test1", "test2", "test3", "test4"] {
-                            connectors1.write().unwrap()
-                                [account_id_to_shard_id(&from.to_string(), 4) as usize]
+                            connectors1.write().unwrap()[account_id_to_shard_id(
+                                &from.to_string(),
+                                &EpochId::default(),
+                                4,
+                            ) as usize]
                                 .0
                                 .do_send(NetworkClientMessages::Transaction {
                                     transaction: SignedTransaction::send_money(

@@ -77,8 +77,13 @@ pub struct KeyValueRuntime {
     epoch_start: RwLock<HashMap<CryptoHash, u64>>,
 }
 
-pub fn account_id_to_shard_id(account_id: &AccountId, num_shards: NumShards) -> ShardId {
-    u64::from((hash(&account_id.clone().into_bytes()).0).0[0]) % num_shards
+pub fn account_id_to_shard_id(
+    account_id: &AccountId,
+    _epoch_id: &EpochId,
+    num_shards: NumShards,
+) -> ShardId {
+    (u64::from((hash(&account_id.clone().into_bytes()).0).0[0])/*+ u64::from((hash(&epoch_id.as_ref()).0).0[0])*/)
+        % num_shards
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Serialize)]
@@ -401,8 +406,8 @@ impl RuntimeAdapter for KeyValueRuntime {
         }
     }
 
-    fn account_id_to_shard_id(&self, account_id: &AccountId) -> ShardId {
-        account_id_to_shard_id(account_id, self.num_shards())
+    fn account_id_to_shard_id(&self, account_id: &AccountId, epoch_id: &EpochId) -> ShardId {
+        account_id_to_shard_id(account_id, epoch_id, self.num_shards())
     }
 
     fn get_part_owner(&self, parent_hash: &CryptoHash, part_id: u64) -> Result<String, Error> {
@@ -473,6 +478,7 @@ impl RuntimeAdapter for KeyValueRuntime {
         _gas_price: Balance,
         _state_update: Option<StateRoot>,
         _transaction: &SignedTransaction,
+        _epoch_id: &EpochId,
     ) -> Result<Option<InvalidTxError>, Error> {
         Ok(None)
     }
@@ -523,7 +529,10 @@ impl RuntimeAdapter for KeyValueRuntime {
 
         for receipt in receipts.iter() {
             if let ReceiptEnum::Action(action) = &receipt.receipt {
-                assert_eq!(self.account_id_to_shard_id(&receipt.receiver_id), shard_id);
+                assert_eq!(
+                    self.account_id_to_shard_id(&receipt.receiver_id, &EpochId::default()),
+                    shard_id
+                );
                 if !state.receipt_nonces.contains(&receipt.receipt_id) {
                     state.receipt_nonces.insert(receipt.receipt_id);
                     if let Action::Transfer(TransferAction { deposit }) = action.actions[0] {
@@ -544,7 +553,13 @@ impl RuntimeAdapter for KeyValueRuntime {
         }
 
         for transaction in transactions {
-            assert_eq!(self.account_id_to_shard_id(&transaction.transaction.signer_id), shard_id);
+            assert_eq!(
+                self.account_id_to_shard_id(
+                    &transaction.transaction.signer_id,
+                    &EpochId::default()
+                ),
+                shard_id
+            );
             if transaction.transaction.actions.is_empty() {
                 continue;
             }
@@ -584,7 +599,7 @@ impl RuntimeAdapter for KeyValueRuntime {
         for (hash, from, to, amount, nonce) in balance_transfers {
             let mut good_to_go = false;
 
-            if self.account_id_to_shard_id(&from) != shard_id {
+            if self.account_id_to_shard_id(&from, &EpochId::default()) != shard_id {
                 // This is a receipt, was already debited
                 good_to_go = true;
             } else if let Some(balance) = state.amounts.get(&from) {
@@ -596,7 +611,9 @@ impl RuntimeAdapter for KeyValueRuntime {
             }
 
             if good_to_go {
-                let new_receipt_hashes = if self.account_id_to_shard_id(&to) == shard_id {
+                let new_receipt_hashes = if self.account_id_to_shard_id(&to, &EpochId::default())
+                    == shard_id
+                {
                     state.amounts.insert(to.clone(), state.amounts.get(&to).unwrap_or(&0) + amount);
                     vec![]
                 } else {
@@ -616,7 +633,9 @@ impl RuntimeAdapter for KeyValueRuntime {
                     };
                     let receipt_hash = receipt.get_hash();
                     new_receipts
-                        .entry(self.account_id_to_shard_id(&receipt.receiver_id))
+                        .entry(
+                            self.account_id_to_shard_id(&receipt.receiver_id, &EpochId::default()),
+                        )
                         .or_insert_with(|| vec![])
                         .push(receipt);
                     vec![receipt_hash]

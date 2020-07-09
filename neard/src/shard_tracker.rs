@@ -12,9 +12,14 @@ use near_primitives::types::{AccountId, EpochId, NumShards, ShardId};
 
 const POISONED_LOCK_ERR: &str = "The lock was poisoned.";
 
-pub fn account_id_to_shard_id(account_id: &AccountId, num_shards: NumShards) -> ShardId {
+pub fn account_id_to_shard_id(
+    account_id: &AccountId,
+    _epoch_id: &EpochId,
+    num_shards: NumShards,
+) -> ShardId {
     let mut cursor = Cursor::new((hash(&account_id.clone().into_bytes()).0).0);
-    cursor.read_u64::<LittleEndian>().expect("Must not happened") % (num_shards)
+    (cursor.read_u64::<LittleEndian>().expect("Must not happened")/*+ u64::from((hash(&epoch_id.as_ref()).0).0[0])*/)
+        % (num_shards)
 }
 
 /// Tracker that tracks shard ids and accounts. It maintains two items: `tracked_accounts` and
@@ -50,7 +55,7 @@ impl ShardTracker {
         num_shards: NumShards,
     ) -> Self {
         let tracked_accounts = accounts.into_iter().fold(HashMap::new(), |mut acc, x| {
-            let shard_id = account_id_to_shard_id(&x, num_shards);
+            let shard_id = account_id_to_shard_id(&x, &epoch_id, num_shards);
             acc.entry(shard_id).or_insert_with(HashSet::new).insert(x);
             acc
         });
@@ -73,7 +78,7 @@ impl ShardTracker {
     }
 
     fn track_account(&mut self, account_id: &AccountId) {
-        let shard_id = account_id_to_shard_id(account_id, self.num_shards);
+        let shard_id = account_id_to_shard_id(account_id, &self.current_epoch_id, self.num_shards);
         self.tracked_accounts
             .entry(shard_id)
             .or_insert_with(HashSet::new)
@@ -107,7 +112,8 @@ impl ShardTracker {
     fn flush_pending(&mut self) {
         let mut shards_to_remove = HashSet::new();
         for account_id in self.pending_untracked_accounts.drain() {
-            let shard_id = account_id_to_shard_id(&account_id, self.num_shards);
+            let shard_id =
+                account_id_to_shard_id(&account_id, &self.current_epoch_id, self.num_shards);
             self.tracked_accounts.entry(shard_id).and_modify(|e| {
                 e.remove(&account_id);
             });
@@ -322,8 +328,16 @@ mod tests {
         tracker.track_accounts(&["test1".to_string(), "test2".to_string()]);
         tracker.track_shards(&[2, 3]);
         let mut total_tracked_shards = HashSet::new();
-        total_tracked_shards.insert(account_id_to_shard_id(&"test1".to_string(), num_shards));
-        total_tracked_shards.insert(account_id_to_shard_id(&"test2".to_string(), num_shards));
+        total_tracked_shards.insert(account_id_to_shard_id(
+            &"test1".to_string(),
+            &EpochId::default(),
+            num_shards,
+        ));
+        total_tracked_shards.insert(account_id_to_shard_id(
+            &"test2".to_string(),
+            &EpochId::default(),
+            num_shards,
+        ));
         total_tracked_shards.insert(2);
         total_tracked_shards.insert(3);
         assert_eq!(tracker.actual_tracked_shards, total_tracked_shards);
@@ -354,7 +368,11 @@ mod tests {
         tracker.update_epoch(&hash(&[2])).unwrap();
 
         let mut total_tracked_shards = HashSet::new();
-        total_tracked_shards.insert(account_id_to_shard_id(&"test1".to_string(), num_shards));
+        total_tracked_shards.insert(account_id_to_shard_id(
+            &"test1".to_string(),
+            &EpochId::default(),
+            num_shards,
+        ));
         total_tracked_shards.insert(2);
         total_tracked_shards.insert(3);
 
@@ -385,8 +403,11 @@ mod tests {
 
         let mut total_tracked_shards = HashSet::new();
         for account_id in vec!["test1", "test2", "test3"] {
-            total_tracked_shards
-                .insert(account_id_to_shard_id(&account_id.to_string(), num_shards));
+            total_tracked_shards.insert(account_id_to_shard_id(
+                &account_id.to_string(),
+                &EpochId::default(),
+                num_shards,
+            ));
         }
 
         assert_eq!(tracker.actual_tracked_shards, total_tracked_shards);

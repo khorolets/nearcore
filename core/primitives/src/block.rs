@@ -233,6 +233,7 @@ impl Block {
             min_gas_price,
             max_gas_price,
         );
+        println!("{:?} {:?}", self.header().gas_price(), expected_price);
         self.header().gas_price() == expected_price
     }
 

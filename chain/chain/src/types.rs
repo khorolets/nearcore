@@ -163,6 +163,7 @@ pub trait RuntimeAdapter: Send + Sync {
         gas_price: Balance,
         state_root: Option<StateRoot>,
         transaction: &SignedTransaction,
+        epoch_id: &EpochId,
     ) -> Result<Option<InvalidTxError>, Error>;
 
     /// Returns an ordered list of valid transactions from the pool up the given limits.
@@ -269,7 +270,7 @@ pub trait RuntimeAdapter: Send + Sync {
     fn num_data_parts(&self) -> usize;
 
     /// Account Id to Shard Id mapping, given current number of shards.
-    fn account_id_to_shard_id(&self, account_id: &AccountId) -> ShardId;
+    fn account_id_to_shard_id(&self, account_id: &AccountId, epoch_id: &EpochId) -> ShardId;
 
     /// Returns `account_id` that suppose to have the `part_id` of all chunks given previous block hash.
     fn get_part_owner(&self, parent_hash: &CryptoHash, part_id: u64) -> Result<AccountId, Error>;
@@ -458,13 +459,15 @@ pub trait RuntimeAdapter: Send + Sync {
     ) -> Result<Ordering, Error>;
 
     /// Build receipts hashes.
-    fn build_receipts_hashes(&self, receipts: &[Receipt]) -> Vec<CryptoHash> {
+    fn build_receipts_hashes(&self, receipts: &[Receipt], epoch_id: &EpochId) -> Vec<CryptoHash> {
         let mut receipts_hashes = vec![];
         for shard_id in 0..self.num_shards() {
             // importance to save the same order while filtering
             let shard_receipts: Vec<Receipt> = receipts
                 .iter()
-                .filter(|&receipt| self.account_id_to_shard_id(&receipt.receiver_id) == shard_id)
+                .filter(|&receipt| {
+                    self.account_id_to_shard_id(&receipt.receiver_id, &epoch_id) == shard_id
+                })
                 .cloned()
                 .collect();
             receipts_hashes

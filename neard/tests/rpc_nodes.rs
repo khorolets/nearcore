@@ -15,7 +15,7 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::merkle::{compute_root_from_path_and_item, verify_path};
 use near_primitives::serialize::{from_base64, to_base64};
 use near_primitives::transaction::{PartialExecutionStatus, SignedTransaction};
-use near_primitives::types::{BlockId, BlockIdOrFinality, TransactionOrReceiptId};
+use near_primitives::types::{BlockId, BlockIdOrFinality, EpochId, TransactionOrReceiptId};
 use near_primitives::views::{
     ExecutionOutcomeView, ExecutionStatusView, FinalExecutionStatus, QueryResponseKind,
 };
@@ -538,6 +538,7 @@ fn test_get_execution_outcome(is_tx_successful: bool) {
                         for id in vec![TransactionOrReceiptId::Transaction {
                             transaction_hash: final_transaction_outcome.transaction_outcome.id,
                             sender_id: "near.0".to_string(),
+                            epoch_id: EpochId::default(),
                         }]
                         .into_iter()
                         .chain(
@@ -545,6 +546,7 @@ fn test_get_execution_outcome(is_tx_successful: bool) {
                                 TransactionOrReceiptId::Receipt {
                                     receipt_id: r.id,
                                     receiver_id: "near.1".to_string(),
+                                    epoch_id: EpochId::default(),
                                 }
                             }),
                         ) {
